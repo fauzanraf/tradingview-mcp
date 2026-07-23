@@ -655,6 +655,76 @@ def compare_strategies(
     }
 
 
+# ─── Public API: get_current_signal ──────────────────────────────────────────
+
+def get_current_signal(symbol: str, strategy: str, period: str = "2y", interval: str = "1d") -> dict:
+    """Is `strategy`'s entry/exit condition active for `symbol` right now?
+
+    Answers one of four states as of the most recent candle:
+      - BUY_TODAY:  a position just opened on the last candle
+      - SELL_TODAY: a position just closed on the last candle
+      - HOLDING:    a position is open, opened before the last candle
+      - FLAT:       no open position
+    """
+    strategy = strategy.lower().strip()
+    period   = period.lower().strip()
+    interval = interval.lower().strip()
+
+    if strategy not in _STRATEGY_MAP:
+        return {"error": f"Unknown strategy '{strategy}'. Choose: {', '.join(_STRATEGY_MAP)}"}
+    if period not in _VALID_PERIODS:
+        return {"error": f"Invalid period '{period}'. Choose: {', '.join(_VALID_PERIODS)}"}
+    if interval not in _VALID_INTERVALS:
+        return {"error": f"Invalid interval '{interval}'. Choose: 1d or 1h"}
+
+    try:
+        candles = _fetch_ohlcv(symbol, period, interval)
+    except Exception as e:
+        return {"error": f"Failed to fetch data for '{symbol}': {e}"}
+
+    min_bars = 30 if interval == "1d" else 100
+    if len(candles) < min_bars:
+        return {"error": f"Not enough data ({len(candles)} bars). Try a longer period."}
+
+    if strategy in _SMA200_STRATEGIES and len(candles) < _SMA200_MIN_BARS:
+        return {"error": (f"Strategy '{strategy}' needs >= {_SMA200_MIN_BARS} bars "
+                          f"(SMA200 warmup); got {len(candles)}. Use period='2y'.")}
+
+    raw_trades = _STRATEGY_MAP[strategy](candles)
+    closed_trades, open_trade = _split_open_closed(raw_trades)
+
+    last_date  = candles[-1]["date"]
+    last_price = candles[-1]["close"]
+
+    result = {
+        "symbol":         symbol.upper(),
+        "strategy":       strategy,
+        "strategy_label": _STRATEGY_LABELS[strategy],
+        "last_date":      last_date,
+        "last_price":     last_price,
+    }
+
+    if open_trade is not None:
+        if open_trade["entry_date"] == last_date:
+            result["status"]      = "BUY_TODAY"
+            result["entry_date"]  = open_trade["entry_date"]
+            result["entry_price"] = open_trade["entry_price"]
+        else:
+            result["status"]         = "HOLDING"
+            result["entry_date"]     = open_trade["entry_date"]
+            result["entry_price"]    = open_trade["entry_price"]
+            result["unrealized_pct"] = round(
+                (last_price - open_trade["entry_price"]) / open_trade["entry_price"] * 100, 2
+            )
+    elif closed_trades and closed_trades[-1]["exit_date"] == last_date:
+        result["status"]     = "SELL_TODAY"
+        result["exit_price"] = closed_trades[-1]["exit_price"]
+    else:
+        result["status"] = "FLAT"
+
+    return result
+
+
 # ─── Public API: walk_forward_backtest ────────────────────────────────────────
 
 def walk_forward_backtest(
