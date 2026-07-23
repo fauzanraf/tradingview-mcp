@@ -51,3 +51,23 @@ def test_donchian_flat_data_yields_no_false_signals():
     # A perfectly flat series never breaks its own channel -> no trades.
     candles = [_candle(d, 10, 10) for d in range(1, 11)]
     assert _run_donchian(candles, period=3) == []
+
+
+def test_donchian_open_position_is_surfaced():
+    # Same setup as test_donchian_breakout_produces_a_trade but WITHOUT the
+    # final breakout-down bar -> the entry from bar 5 is still open at the
+    # end of the data.
+    candles = [
+        _candle(1, 10, 10),
+        _candle(2, 10, 10),
+        _candle(3, 10, 10),
+        _candle(4, 10, 10),
+        _candle(5, 20, 15, close=18),   # breakout up -> entry, never exits
+        _candle(6, 20, 18, close=18),
+    ]
+    trades = _run_donchian(candles, period=3)
+
+    assert len(trades) == 1
+    assert trades[0]["exit_date"] is None
+    assert trades[0]["exit_price"] is None
+    assert trades[0]["entry_date"] == "2026-01-05"

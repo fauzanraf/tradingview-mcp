@@ -110,6 +110,8 @@ def _run_rsi(candles, oversold=40, overbought=60, period=14, **_):
         elif position is not None and rsi[i] > overbought:
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
@@ -126,6 +128,8 @@ def _run_bollinger(candles, period=20, std_mult=2.0, **_):
         elif position is not None and price > bb["middle"][i]:
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
@@ -143,6 +147,8 @@ def _run_macd(candles, fast=12, slow=26, signal=9, **_):
         elif position is not None and mp > sp and m <= s:
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
@@ -161,6 +167,8 @@ def _run_ema_cross(candles, fast_period=20, slow_period=50, **_):
         elif position is not None and fp > sp and f <= s:
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
@@ -180,6 +188,8 @@ def _run_supertrend(candles, atr_period=10, multiplier=3.0, **_):
         elif position is not None and dp == 1 and d == -1:
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
@@ -200,6 +210,8 @@ def _run_donchian(candles, period=20, **_):
         elif position is not None and lows[i] < dc["lower"][i - 1]:
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
@@ -225,6 +237,8 @@ def _run_rsi_pullback(candles, rsi_period=14, oversold=40, overbought=70,
         elif position is not None and (rsi[i] > overbought or price < sma_fast[i]):
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
@@ -251,6 +265,8 @@ def _run_keltner_breakout(candles, ema_period=20, atr_period=14, multiplier=2.0,
         elif position is not None and price < ema[i]:
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
@@ -277,6 +293,8 @@ def _run_triple_ema(candles, fast_period=20, slow_period=50, trend_period=200, *
         elif position is not None and bear_cross:
             trades.append({**position, "exit_date": date, "exit_price": price})
             position = None
+    if position is not None:
+        trades.append({**position, "exit_date": None, "exit_price": None})
     return trades
 
 
