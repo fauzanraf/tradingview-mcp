@@ -324,6 +324,18 @@ def _apply_costs(trades: list[dict], commission_pct: float, slippage_pct: float)
     return result
 
 
+def _split_open_closed(raw_trades: list[dict]) -> tuple[list[dict], Optional[dict]]:
+    """Separate closed trades from a trailing still-open position.
+
+    Every `_run_*` strategy function appends at most one open position, and
+    only as the LAST element (it's appended once, after the closed-trade
+    loop finishes) — so checking just the last element is sufficient.
+    """
+    if raw_trades and raw_trades[-1].get("exit_date") is None:
+        return raw_trades[:-1], raw_trades[-1]
+    return raw_trades, None
+
+
 # ─── Trade Log & Equity Curve ─────────────────────────────────────────────────
 
 def _build_trade_log(trades: list[dict], initial_capital: float) -> list[dict]:
@@ -526,7 +538,8 @@ def run_backtest(
                           f"Use period='1y' or '2y'.")}
 
     raw_trades = _STRATEGY_MAP[strategy](candles)
-    trades     = _apply_costs(raw_trades, commission_pct, slippage_pct)
+    closed_trades, _open_trade = _split_open_closed(raw_trades)
+    trades     = _apply_costs(closed_trades, commission_pct, slippage_pct)
     metrics    = _calc_metrics(trades, initial_capital, interval)
     bnh        = _buy_and_hold_return(candles)
 
@@ -594,7 +607,8 @@ def compare_strategies(
     results = []
     for strat, fn in _STRATEGY_MAP.items():
         raw    = fn(candles)
-        trades = _apply_costs(raw, commission_pct, slippage_pct)
+        closed_trades, _open_trade = _split_open_closed(raw)
+        trades = _apply_costs(closed_trades, commission_pct, slippage_pct)
         m      = _calc_metrics(trades, initial_capital, interval)
         results.append({
             "strategy":         strat,
@@ -718,8 +732,10 @@ def walk_forward_backtest(
         if len(train_c) < 20 or len(test_c) < 5:
             continue
 
-        train_t = _apply_costs(fn(train_c), commission_pct, slippage_pct)
-        test_t  = _apply_costs(fn(test_c),  commission_pct, slippage_pct)
+        train_closed, _open_train = _split_open_closed(fn(train_c))
+        test_closed,  _open_test  = _split_open_closed(fn(test_c))
+        train_t = _apply_costs(train_closed, commission_pct, slippage_pct)
+        test_t  = _apply_costs(test_closed,  commission_pct, slippage_pct)
         train_m = _calc_metrics(train_t, initial_capital, interval)
         test_m  = _calc_metrics(test_t,  initial_capital, interval)
 

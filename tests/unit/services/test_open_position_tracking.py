@@ -5,7 +5,7 @@ get_current_signal, which asks "what's the state right now").
 Network-free: call the private `_run_*` functions directly with synthetic
 candles, same pattern as test_donchian_backtest.py.
 """
-from tradingview_mcp.core.services.backtest_service import _run_rsi
+from tradingview_mcp.core.services.backtest_service import _run_rsi, _split_open_closed
 
 
 def _candle(day: int, close: float) -> dict:
@@ -51,3 +51,23 @@ def test_rsi_no_trades_yields_empty_list_still():
     # Flat prices never cross the RSI thresholds -> no open position, no crash.
     candles = [_candle(i + 1, 50.0) for i in range(20)]
     assert _run_rsi(candles, oversold=40, overbought=60, period=14) == []
+
+
+def test_split_open_closed_separates_trailing_open_trade():
+    closed = {"entry_date": "2026-01-01", "entry_price": 10, "exit_date": "2026-01-05", "exit_price": 12, "strategy": "rsi"}
+    open_t = {"entry_date": "2026-01-10", "entry_price": 15, "exit_date": None, "exit_price": None, "strategy": "rsi"}
+
+    result_closed, result_open = _split_open_closed([closed, open_t])
+    assert result_closed == [closed]
+    assert result_open == open_t
+
+
+def test_split_open_closed_no_open_trade():
+    closed = {"entry_date": "2026-01-01", "entry_price": 10, "exit_date": "2026-01-05", "exit_price": 12, "strategy": "rsi"}
+    result_closed, result_open = _split_open_closed([closed])
+    assert result_closed == [closed]
+    assert result_open is None
+
+
+def test_split_open_closed_empty_list():
+    assert _split_open_closed([]) == ([], None)
