@@ -10,6 +10,12 @@ Usage:
     python3 trading.py compare AAPL 2y
     python3 trading.py walkforward AAPL rsi 2y
     python3 trading.py sentiment BTC
+    python3 trading.py buy BTC-USD 0.01 USD
+    python3 trading.py sell BTC-USD 0.01 USD
+    python3 trading.py portfolio
+    python3 trading.py history
+    python3 trading.py signals
+    python3 trading.py signals AAPL,BTC-USD,BBCA.JK
 
 Install path: ~/.openclaw/tools/trading.py
 """
@@ -34,14 +40,22 @@ else:
 
 try:
     from tradingview_mcp.core.services.yahoo_finance_service import get_price, get_market_snapshot
-    from tradingview_mcp.core.services.backtest_service import run_backtest, compare_strategies, walk_forward_backtest
+    from tradingview_mcp.core.services.backtest_service import (
+        run_backtest, compare_strategies, walk_forward_backtest, get_current_signal,
+    )
     from tradingview_mcp.core.services.sentiment_service import analyze_sentiment
+    from tradingview_mcp.core.portfolio import execute_trade, get_portfolio, get_trade_history
 except ImportError as e:
     print(json.dumps({"error": str(e), "fix": "Run: uv tool install tradingview-mcp-server"}))
     sys.exit(1)
 
 cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
 args = sys.argv[2:]
+
+# Single local user, no auth (see CONTEXT.md: "Single user, no auth")
+PAPER_USER_ID = "default"
+
+DEFAULT_SIGNAL_WATCHLIST = ["SPUS", "HLAL", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"]
 
 
 def _require_symbol():
@@ -87,8 +101,55 @@ try:
     elif cmd == "sentiment":
         print(json.dumps(analyze_sentiment(_require_symbol()), indent=2))
 
+    elif cmd in ("buy", "sell"):
+        symbol = _require_symbol()
+        if len(args) < 2:
+            print(json.dumps({"error": f"Usage: trading.py {cmd} <symbol> <quantity>"}))
+            sys.exit(1)
+        quantity = float(args[1])
+
+        quote = get_price(symbol)
+        if "error" in quote:
+            print(json.dumps(quote))
+            sys.exit(1)
+
+        result = execute_trade(
+            user_id=PAPER_USER_ID,
+            symbol=symbol,
+            quantity=quantity,
+            current_price=quote["price"],
+            side=cmd,
+            currency=quote.get("currency", "USD"),
+        )
+        print(json.dumps(result, indent=2))
+
+    elif cmd == "portfolio":
+        print(json.dumps(get_portfolio(PAPER_USER_ID), indent=2))
+
+    elif cmd == "history":
+        limit = int(args[0]) if args else 20
+        print(json.dumps(get_trade_history(PAPER_USER_ID, limit), indent=2))
+
+    elif cmd == "signals":
+        symbols = args[0].split(",") if args else DEFAULT_SIGNAL_WATCHLIST
+        report = []
+        for sym in symbols:
+            sym = sym.strip()
+            cmp = compare_strategies(sym, period="2y")
+            if "error" in cmp:
+                report.append({"symbol": sym, "error": cmp["error"]})
+                continue
+            ranking = cmp.get("ranking") or []
+            if not ranking:
+                report.append({"symbol": sym, "error": "No strategy ranking available"})
+                continue
+            best_strategy = ranking[0]["strategy"]
+            signal = get_current_signal(sym, best_strategy, period="2y")
+            report.append(signal)
+        print(json.dumps(report, indent=2))
+
     elif cmd == "help":
-        print("Commands: price <sym> | snapshot | backtest <sym> <strategy> <period> [interval] | compare <sym> [period] | walkforward <sym> [strategy] [period] | sentiment <sym>")
+        print("Commands: price <sym> | snapshot | backtest <sym> <strategy> <period> [interval] | compare <sym> [period] | walkforward <sym> [strategy] [period] | sentiment <sym> | buy <sym> <qty> | sell <sym> <qty> | portfolio | history [limit] | signals [sym1,sym2,...]")
         print("Strategies: rsi | bollinger | macd | ema_cross | supertrend | donchian")
 
     else:
