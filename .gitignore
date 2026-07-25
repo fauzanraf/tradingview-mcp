@@ -214,7 +214,10 @@ __marimo__/
 # Local development and testing files
 test_nyse.py
 scripts/fetch_nyse_tickers.py
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/session-start.sh
 
 # AI Agent skills — local only, never commit
 .agents/
